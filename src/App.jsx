@@ -240,11 +240,11 @@ export default function App() {
 
           {/* Settings Button */}
           <button 
-            className="btn" 
+            className="btn btn-settings" 
             onClick={() => setIsConfigModalOpen(true)}
             title="App Settings & Calibration"
           >
-            ⚙️ Settings
+            ⚙️ <span className="settings-text">Settings</span>
           </button>
 
           {/* Theme Toggle */}
@@ -314,7 +314,7 @@ export default function App() {
             </div>
 
             {/* Week Selector Override Tabs */}
-            <div className="filter-group" style={{ marginTop: '0.75rem' }}>
+            <div className="filter-group filter-group--week" style={{ marginTop: '0.75rem' }}>
               <span className="filter-label">Rotation Cycle</span>
               <div className="segmented-tabs">
                 {WEEKS.map(wk => (
