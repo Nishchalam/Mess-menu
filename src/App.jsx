@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getMenu } from './menuData';
 import { 
   calculateWeekCycle, 
@@ -12,6 +12,13 @@ import MealCard from './components/MealCard';
 import SettingsModal from './components/SettingsModal';
 import MealEditModal from './components/MealEditModal';
 import SearchPanel from './components/SearchPanel';
+import { 
+  fetchCommittedOverrides, 
+  saveCommittedOverrides,
+  getStoredAdminKey,
+  ADMIN_KEY,
+  BIN_ID_KEY
+} from './adminDb';
 
 const DEFAULT_ANCHOR_DATE = '2026-06-01'; // A Monday
 const DEFAULT_ANCHOR_WEEK = 'A';
@@ -46,44 +53,67 @@ export default function App() {
     return saved ? JSON.parse(saved) : {};
   });
 
-  // --- Committed (Admin) Database: fetched from /menuOverrides.json in the repo ---
-  // This is the source-of-truth for all users. Admin edits this file and pushes to GitHub.
+  // --- Cloud (Committed) Database: fetched from JSONBin ---
+  // This is the shared source-of-truth. Admin edits here sync to everyone.
   const [committedOverrides, setCommittedOverrides] = useState({});
+  const [dbLoading, setDbLoading] = useState(false);
+
+  // --- Admin State ---
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminKey, setAdminKey] = useState(() => getStoredAdminKey() || '');
 
   // --- UI State ---
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [activeCuisine, setActiveCuisine] = useState('North Indian');
   const [activeMessType, setActiveMessType] = useState('Veg');
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
-  const [activeEditMeal, setActiveEditMeal] = useState(null); // { mealName, week, day, cuisine, messType, currentItems }
+  const [activeEditMeal, setActiveEditMeal] = useState(null);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // --- Manual Override State ---
-  // If the user manually changes the day or week, we track the override.
   const [manualWeek, setManualWeek] = useState(null);
   const [manualDay, setManualDay] = useState(null);
 
-  // --- Synchronize Menu Overrides ---
+  // --- Synchronize personal overrides to localStorage ---
   useEffect(() => {
     localStorage.setItem('messMenuOverrides', JSON.stringify(menuOverrides));
   }, [menuOverrides]);
 
-  // --- Fetch Committed (Admin) Database from /menuOverrides.json ---
-  useEffect(() => {
-    fetch('./menuOverrides.json')
-      .then(res => {
-        if (!res.ok) return {};
-        return res.json();
-      })
-      .then(data => {
-        if (data && typeof data === 'object' && !Array.isArray(data)) {
-          setCommittedOverrides(data);
-        }
-      })
-      .catch(() => {
-        // If fetch fails (e.g., dev without the file), silently ignore.
-      });
+  // --- Load cloud database from JSONBin on startup ---
+  const loadCloudDb = useCallback(async () => {
+    setDbLoading(true);
+    try {
+      const data = await fetchCommittedOverrides();
+      setCommittedOverrides(data);
+    } catch {
+      // silently fail — falls back to base menu
+    } finally {
+      setDbLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    loadCloudDb();
+  }, [loadCloudDb]);
+
+  // --- Admin: save an override to the cloud database ---
+  const handleAdminSaveOverride = useCallback(async (key, items) => {
+    const newCommitted = { ...committedOverrides, [key]: items };
+    await saveCommittedOverrides(newCommitted, adminKey);
+    setCommittedOverrides(newCommitted);
+  }, [committedOverrides, adminKey]);
+
+  // --- Admin login/logout ---
+  const handleAdminLogin = (key) => {
+    setAdminKey(key);
+    setIsAdmin(true);
+    localStorage.setItem(ADMIN_KEY, key);
+  };
+
+  const handleAdminLogout = () => {
+    setIsAdmin(false);
+    // Keep the key in localStorage for next login (don't force re-entry)
+  };
 
   // --- Apply Theme Class ---
   useEffect(() => {
@@ -266,6 +296,17 @@ export default function App() {
             />
           </div>
 
+          {/* Admin badge */}
+          {isAdmin && (
+            <button 
+              className="btn admin-badge"
+              onClick={handleAdminLogout}
+              title="Admin mode active — click to exit"
+            >
+              🛡️ <span className="settings-text">Admin</span>
+            </button>
+          )}
+
           {/* Settings Button */}
           <button 
             className="btn btn-settings" 
@@ -401,6 +442,7 @@ export default function App() {
                   mealData={mealData}
                   isFavorite={mealData && mealData.length > 0 && favorites.includes(mealData[0])}
                   onToggleFavorite={handleToggleFavorite}
+                  isAdmin={isAdmin}
                   onEditMeal={(name) => {
                     setActiveEditMeal({
                       mealName: name,
@@ -453,9 +495,14 @@ export default function App() {
         committedOverrides={committedOverrides}
         onClearOverrides={() => setMenuOverrides({})}
         onImportOverrides={(imported) => setMenuOverrides(imported)}
+        isAdmin={isAdmin}
+        adminKey={adminKey}
+        onAdminLogin={handleAdminLogin}
+        onAdminLogout={handleAdminLogout}
+        onRefreshDb={loadCloudDb}
       />
 
-      {/* Meal Edit Modal */}
+      {/* Meal Edit Modal — admin saves to cloud, normal saves to localStorage */}
       {activeEditMeal && (
         <MealEditModal 
           isOpen={!!activeEditMeal}
@@ -466,20 +513,32 @@ export default function App() {
           messType={activeEditMeal.messType}
           mealName={activeEditMeal.mealName}
           currentItems={activeEditMeal.currentItems}
-          onSave={(updatedItems) => {
+          isAdmin={isAdmin}
+          onSave={async (updatedItems) => {
             const key = `${activeEditMeal.week}-${activeEditMeal.day}-${activeEditMeal.cuisine}-${activeEditMeal.messType}-${activeEditMeal.mealName}`;
-            setMenuOverrides(prev => ({
-              ...prev,
-              [key]: updatedItems
-            }));
+            if (isAdmin) {
+              // Save to cloud — everyone sees this
+              await handleAdminSaveOverride(key, updatedItems);
+            } else {
+              // Save only locally (personal override)
+              setMenuOverrides(prev => ({ ...prev, [key]: updatedItems }));
+            }
           }}
-          onReset={() => {
+          onReset={async () => {
             const key = `${activeEditMeal.week}-${activeEditMeal.day}-${activeEditMeal.cuisine}-${activeEditMeal.messType}-${activeEditMeal.mealName}`;
-            setMenuOverrides(prev => {
-              const copy = { ...prev };
-              delete copy[key];
-              return copy;
-            });
+            if (isAdmin) {
+              // Remove from cloud DB
+              const newCommitted = { ...committedOverrides };
+              delete newCommitted[key];
+              await saveCommittedOverrides(newCommitted, adminKey);
+              setCommittedOverrides(newCommitted);
+            } else {
+              setMenuOverrides(prev => {
+                const copy = { ...prev };
+                delete copy[key];
+                return copy;
+              });
+            }
           }}
         />
       )}

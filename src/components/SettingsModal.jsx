@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { formatDateInput } from '../utils';
+import { createNewBin, BIN_ID_KEY, ADMIN_KEY } from '../adminDb';
 
 export default function SettingsModal({ 
   isOpen, 
@@ -11,22 +11,27 @@ export default function SettingsModal({
   overrides,
   committedOverrides,
   onClearOverrides,
-  onImportOverrides
+  isAdmin,
+  adminKey,
+  onAdminLogin,
+  onAdminLogout,
+  onRefreshDb,
 }) {
   if (!isOpen) return null;
 
-  const [activeTab, setActiveTab] = useState('calibrate'); // 'calibrate' | 'database'
+  const [activeTab, setActiveTab] = useState(isAdmin ? 'admin' : 'calibrate');
   const [dateVal, setDateVal] = useState(currentAnchorDate);
   const [weekVal, setWeekVal] = useState(currentAnchorWeek);
-  const [importError, setImportError] = useState('');
-  const [copied, setCopied] = useState(false);
 
-  const numPersonalOverrides = Object.keys(overrides || {}).length;
-  const numCommittedOverrides = Object.keys(committedOverrides || {}).length;
+  // Admin login state
+  const [secretInput, setSecretInput] = useState('');
+  const [binIdInput, setBinIdInput] = useState(() => localStorage.getItem(BIN_ID_KEY) || '');
+  const [loginError, setLoginError] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [setupMode, setSetupMode] = useState(false); // true = first-time create bin
 
-  // Merge personal overrides ON TOP of committed for the admin database file
-  const mergedForExport = { ...(committedOverrides || {}), ...(overrides || {}) };
-  const numMergedOverrides = Object.keys(mergedForExport).length;
+  const numCommitted = Object.keys(committedOverrides || {}).length;
+  const numPersonal = Object.keys(overrides || {}).length;
 
   const handleCalibrationSubmit = (e) => {
     e.preventDefault();
@@ -34,77 +39,54 @@ export default function SettingsModal({
     onClose();
   };
 
-  // ── ADMIN: Export merged database as menuOverrides.json ──────────────────
-  // Merges committed + personal edits into one file ready to commit to GitHub.
-  const handleExportAdminDatabase = () => {
-    const json = JSON.stringify(mergedForExport, null, 2);
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(json);
-    const a = document.createElement('a');
-    a.setAttribute("href", dataStr);
-    a.setAttribute("download", "menuOverrides.json");
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
+  // ── Admin Login ───────────────────────────────────────────────────────────
+  const handleAdminLogin = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    setLoginLoading(true);
 
-  // ── PERSONAL: Export only personal overrides as a backup ─────────────────
-  const handleExportPersonalBackup = () => {
-    const json = JSON.stringify(overrides, null, 2);
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(json);
-    const a = document.createElement('a');
-    a.setAttribute("href", dataStr);
-    a.setAttribute("download", "vibemess_personal_backup.json");
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-  };
+    try {
+      let binId = binIdInput.trim();
 
-  // ── IMPORT: Restore personal overrides from a backup file ────────────────
-  const handleImportDatabase = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setImportError('');
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      try {
-        const parsed = JSON.parse(event.target.result);
-        
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-          throw new Error("Backup file must be a JSON object.");
-        }
-
-        // Schema key pattern: "Week-Day-Cuisine-MessType-MealName"
-        const keyPattern = /^[A-D]-[A-Za-z]+-[A-Za-z ]+-[A-Za-z\-]+-[A-Za-z]+$/;
-        for (const [key, value] of Object.entries(parsed)) {
-          if (!keyPattern.test(key)) {
-            throw new Error(`Invalid format key: ${key}`);
-          }
-          if (!Array.isArray(value) || !value.every(v => typeof v === 'string')) {
-            throw new Error(`Invalid value for key ${key}. Expected array of strings.`);
-          }
-        }
-
-        onImportOverrides(parsed);
-        alert(`✅ Imported ${Object.keys(parsed).length} meal overrides!`);
-      } catch (err) {
-        setImportError(err.message || "Failed to parse JSON file.");
+      if (setupMode || !binId) {
+        // First-time setup: create a new public bin
+        binId = await createNewBin(secretInput.trim());
+        localStorage.setItem(BIN_ID_KEY, binId);
+        setBinIdInput(binId);
       }
-    };
-    reader.readAsText(file);
+
+      // Verify the key works by trying to read
+      const res = await fetch(`https://api.jsonbin.io/v3/b/${binId}/latest`, {
+        headers: {
+          'X-Master-Key': secretInput.trim(),
+          'X-Bin-Meta': 'false',
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error('Invalid secret code or Bin ID. Please check and try again.');
+      }
+
+      localStorage.setItem(BIN_ID_KEY, binId);
+      onAdminLogin(secretInput.trim());
+      onRefreshDb();
+      setSecretInput('');
+      setLoginError('');
+    } catch (err) {
+      setLoginError(err.message || 'Login failed. Please try again.');
+    } finally {
+      setLoginLoading(false);
+    }
   };
 
-  const copyGitCommands = () => {
-    const cmd = `cp ~/Downloads/menuOverrides.json ./public/menuOverrides.json\ngit add public/menuOverrides.json\ngit commit -m "update: mess menu database"\ngit push origin main\nnpm run deploy`;
-    navigator.clipboard.writeText(cmd).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    });
+  const handleLogout = () => {
+    onAdminLogout();
+    setActiveTab('calibrate');
   };
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <div className="modal-content glass-panel" style={{ maxInlineSize: '580px' }}>
+      <div className="modal-content glass-panel" style={{ maxInlineSize: '560px' }}>
         <div className="modal-header">
           <h2 id="settings-title" className="modal-title">⚙️ App Settings</h2>
           <button className="modal-close-btn" onClick={onClose} aria-label="Close dialog">×</button>
@@ -121,14 +103,14 @@ export default function SettingsModal({
           </button>
           <button 
             type="button"
-            className={`settings-tab-btn ${activeTab === 'database' ? 'active' : ''}`}
-            onClick={() => setActiveTab('database')}
+            className={`settings-tab-btn ${activeTab === 'admin' ? 'active' : ''}`}
+            onClick={() => setActiveTab('admin')}
           >
-            Database Settings
+            {isAdmin ? '🛡️ Admin' : '🔐 Admin Login'}
           </button>
         </div>
 
-        {/* Tab 1: Calibration */}
+        {/* ── Tab 1: Calibration ─────────────────────────────────── */}
         {activeTab === 'calibrate' && (
           <form onSubmit={handleCalibrationSubmit} className="modal-body">
             <p className="text-pretty" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
@@ -178,115 +160,143 @@ export default function SettingsModal({
           </form>
         )}
 
-        {/* Tab 2: Database Management */}
-        {activeTab === 'database' && (
+        {/* ── Tab 2: Admin ───────────────────────────────────────── */}
+        {activeTab === 'admin' && (
           <div className="modal-body">
 
-            {/* Stats */}
-            <div className="db-stats-box">
-              <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>📊 Database Status</div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.85rem' }}>
-                <div>
-                  🌐 <strong>Committed (shared with everyone):</strong>{' '}
-                  <span style={{ color: numCommittedOverrides > 0 ? 'var(--accent)' : 'var(--text-tertiary)' }}>
-                    {numCommittedOverrides} meal{numCommittedOverrides !== 1 ? 's' : ''} edited
-                  </span>
+            {/* Already logged in */}
+            {isAdmin ? (
+              <>
+                <div className="admin-logged-in-box">
+                  <div className="admin-logged-in-icon">🛡️</div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '1rem' }}>Admin Mode Active</div>
+                    <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginTop: '0.2rem' }}>
+                      Edit buttons are visible on all meal cards. Changes save instantly for everyone.
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  📱 <strong>Personal (this device only):</strong>{' '}
-                  <span style={{ color: numPersonalOverrides > 0 ? '#f59e0b' : 'var(--text-tertiary)' }}>
-                    {numPersonalOverrides} meal{numPersonalOverrides !== 1 ? 's' : ''} edited
-                  </span>
+
+                <div className="db-stats-box" style={{ marginTop: '0.5rem' }}>
+                  <div style={{ fontWeight: 700, marginBottom: '0.4rem' }}>📊 Database Status</div>
+                  <div style={{ fontSize: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                    <div>🌐 Shared edits (visible to everyone): <strong>{numCommitted}</strong></div>
+                    <div>📱 Your personal edits (this device): <strong>{numPersonal}</strong></div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Admin Section */}
-            <div className="admin-section">
-              <div className="admin-section-title">🛡️ Admin — Publish to GitHub</div>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.5', margin: '0.4rem 0 0.75rem' }}>
-                This merges your personal edits with the existing committed database into one file.
-                Save it as <code style={{ background: 'rgba(99,102,241,0.1)', padding: '0 4px', borderRadius: '3px' }}>public/menuOverrides.json</code> in the project, then commit &amp; deploy.
-              </p>
-              <button 
-                type="button" 
-                className="btn btn-primary"
-                onClick={handleExportAdminDatabase}
-                disabled={numMergedOverrides === 0}
-                style={{ width: '100%' }}
-              >
-                📥 Download menuOverrides.json ({numMergedOverrides} edits)
-              </button>
-
-              {/* Git commands cheat sheet */}
-              <div className="git-cheatsheet">
-                <div className="git-cheatsheet-header">
-                  <span>📋 After downloading, run these commands:</span>
-                  <button className="git-copy-btn" onClick={copyGitCommands}>
-                    {copied ? '✅ Copied!' : 'Copy'}
+                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap' }}>
+                  <button 
+                    type="button" 
+                    className="btn btn-primary"
+                    onClick={() => { onRefreshDb(); }}
+                    style={{ flex: 1 }}
+                  >
+                    🔄 Refresh from Cloud
+                  </button>
+                  <button 
+                    type="button"
+                    className="btn"
+                    onClick={handleLogout}
+                    style={{ flex: 1, borderColor: '#ef4444', color: '#ef4444' }}
+                  >
+                    🚪 Exit Admin Mode
                   </button>
                 </div>
-                <pre className="git-commands">{`cp ~/Downloads/menuOverrides.json ./public/menuOverrides.json
-git add public/menuOverrides.json
-git commit -m "update: mess menu database"
-git push origin main
-npm run deploy`}</pre>
-              </div>
-            </div>
 
-            {/* Personal Backup Section */}
-            <div className="admin-section" style={{ borderColor: 'rgba(245,158,11,0.2)', background: 'rgba(245,158,11,0.03)' }}>
-              <div className="admin-section-title" style={{ color: '#f59e0b' }}>📱 Personal Backup</div>
-              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.5', margin: '0.4rem 0 0.75rem' }}>
-                Export just your personal local edits, or import a backup to restore them.
-              </p>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <button 
-                  type="button" 
-                  className="btn"
-                  onClick={handleExportPersonalBackup}
-                  disabled={numPersonalOverrides === 0}
-                >
-                  💾 Backup Personal
-                </button>
-                
-                <label className="btn" style={{ cursor: 'pointer', textAlign: 'center' }}>
-                  📤 Restore Backup
-                  <input 
-                    type="file" 
-                    accept=".json" 
-                    onChange={handleImportDatabase} 
-                    style={{ display: 'none' }}
-                  />
-                </label>
-              </div>
-
-              {importError && (
-                <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.5rem' }}>
-                  ❌ {importError}
+                <div className="modal-footer" style={{ borderTop: 'none', paddingTop: 0, marginTop: '0.5rem' }}>
+                  <button type="button" className="btn" onClick={onClose} style={{ width: '100%' }}>Close Settings</button>
                 </div>
-              )}
-            </div>
+              </>
+            ) : (
+              /* Not logged in */
+              <>
+                <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.5' }}>
+                  Enter your admin secret code to unlock menu editing. Changes you make will update the menu for <strong>everyone</strong>.
+                </p>
 
-            {/* Clear personal overrides */}
-            <button 
-              type="button"
-              className="btn"
-              onClick={() => {
-                if (confirm("Clear all your personal edits? The committed (shared) database is not affected.")) {
-                  onClearOverrides();
-                  alert("Personal edits cleared. You now see the committed shared menu.");
-                }
-              }}
-              disabled={numPersonalOverrides === 0}
-              style={{ borderColor: '#ef4444', color: '#ef4444', width: '100%' }}
-            >
-              🗑️ Clear Personal Edits ({numPersonalOverrides})
-            </button>
+                <form onSubmit={handleAdminLogin} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
 
-            <div className="modal-footer" style={{ borderTop: 'none', paddingTop: '0' }}>
-              <button type="button" className="btn" onClick={onClose} style={{ width: '100%' }}>Close Settings</button>
-            </div>
+                  {/* Bin ID field */}
+                  <div className="form-group">
+                    <label htmlFor="admin-bin-id" className="form-label">
+                      Database ID
+                      <span style={{ fontWeight: 400, marginLeft: '0.4rem', color: 'var(--text-tertiary)' }}>
+                        (from jsonbin.io)
+                      </span>
+                    </label>
+                    <input
+                      id="admin-bin-id"
+                      type="text"
+                      className="search-input"
+                      placeholder="e.g. 665f3a2e5d9e75d7c3a8e1b2"
+                      value={binIdInput}
+                      onChange={e => setBinIdInput(e.target.value)}
+                      spellCheck={false}
+                      autoComplete="off"
+                    />
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-tertiary)' }}>
+                      Leave blank to auto-create a new database on first login.
+                    </div>
+                  </div>
+
+                  {/* Secret code field */}
+                  <div className="form-group">
+                    <label htmlFor="admin-secret" className="form-label">
+                      Secret Code
+                      <span style={{ fontWeight: 400, marginLeft: '0.4rem', color: 'var(--text-tertiary)' }}>
+                        (your JSONBin Master Key)
+                      </span>
+                    </label>
+                    <input
+                      id="admin-secret"
+                      type="password"
+                      className="search-input"
+                      placeholder="$2a$10$…"
+                      value={secretInput}
+                      onChange={e => setSecretInput(e.target.value)}
+                      required
+                      autoComplete="current-password"
+                    />
+                  </div>
+
+                  {loginError && (
+                    <div style={{ color: '#ef4444', fontSize: '0.82rem', background: 'rgba(239,68,68,0.08)', padding: '0.6rem 0.75rem', borderRadius: '6px' }}>
+                      ❌ {loginError}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    disabled={loginLoading || !secretInput}
+                    style={{ width: '100%' }}
+                  >
+                    {loginLoading ? '🔄 Connecting…' : '🔐 Login as Admin'}
+                  </button>
+                </form>
+
+                {/* Setup instructions callout */}
+                <div className="git-cheatsheet" style={{ marginTop: '0.75rem' }}>
+                  <div className="git-cheatsheet-header">
+                    <span>🚀 First time? Get your secret code in 2 min</span>
+                  </div>
+                  <div style={{ padding: '0.75rem', fontSize: '0.8rem', lineHeight: '1.6', color: 'var(--text-secondary)' }}>
+                    <ol style={{ paddingLeft: '1.2rem', margin: 0, display: 'flex', flexDirection: 'column', gap: '0.3rem' }}>
+                      <li>Go to <a href="https://jsonbin.io" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>jsonbin.io</a> → Sign up free</li>
+                      <li>Go to <strong>API Keys</strong> → copy the <strong>Master Key</strong></li>
+                      <li>Leave Database ID blank → app will auto-create it</li>
+                      <li>Paste the Master Key above as your Secret Code</li>
+                      <li>Done! Share the Database ID (not the key) with nobody 😄</li>
+                    </ol>
+                  </div>
+                </div>
+
+                <div className="modal-footer" style={{ borderTop: 'none', paddingTop: 0, marginTop: '0.5rem' }}>
+                  <button type="button" className="btn" onClick={onClose} style={{ width: '100%' }}>Close Settings</button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>

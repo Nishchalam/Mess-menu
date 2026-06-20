@@ -14,7 +14,7 @@ const MEAL_TIMES = {
   Dinner: '7:30 PM - 9:30 PM'
 };
 
-export default function MealCard({ mealName, mealData, isFavorite, onToggleFavorite, onEditMeal }) {
+export default function MealCard({ mealName, mealData, isFavorite, onToggleFavorite, onEditMeal, isAdmin }) {
   const icon = MEAL_ICONS[mealName] || '🍽️';
   const time = MEAL_TIMES[mealName] || '';
 
@@ -29,14 +29,16 @@ export default function MealCard({ mealName, mealData, isFavorite, onToggleFavor
               {mealName}
             </h3>
           </div>
-          <button 
-            className="edit-btn"
-            onClick={() => onEditMeal(mealName)}
-            title={`Edit ${mealName} menu`}
-            aria-label={`Edit ${mealName} menu`}
-          >
-            ✏️
-          </button>
+          {isAdmin && (
+            <button 
+              className="edit-btn"
+              onClick={() => onEditMeal(mealName)}
+              title={`Edit ${mealName} menu`}
+              aria-label={`Edit ${mealName} menu`}
+            >
+              ✏️
+            </button>
+          )}
         </div>
         <div className="meal-body">
           <div className="empty-state" style={{ padding: '1rem 0' }}>Mess Closed</div>
@@ -58,14 +60,16 @@ export default function MealCard({ mealName, mealData, isFavorite, onToggleFavor
           </h3>
         </div>
         <div style={{ display: 'flex', gap: '0.25rem' }}>
-          <button 
-            className="edit-btn"
-            onClick={() => onEditMeal(mealName)}
-            title={`Edit ${mealName} menu`}
-            aria-label={`Edit ${mealName} menu`}
-          >
-            ✏️
-          </button>
+          {isAdmin && (
+            <button 
+              className="edit-btn"
+              onClick={() => onEditMeal(mealName)}
+              title={`Edit ${mealName} menu`}
+              aria-label={`Edit ${mealName} menu`}
+            >
+              ✏️
+            </button>
+          )}
           <button 
             className={`fav-btn ${isFavorite ? 'is-fav' : ''}`}
             onClick={() => onToggleFavorite(mealId)}
