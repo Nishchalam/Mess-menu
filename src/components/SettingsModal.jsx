@@ -9,6 +9,7 @@ export default function SettingsModal({
   onSaveCalibration, 
   onRevertCalibration,
   overrides,
+  committedOverrides,
   onClearOverrides,
   onImportOverrides
 }) {
@@ -18,8 +19,14 @@ export default function SettingsModal({
   const [dateVal, setDateVal] = useState(currentAnchorDate);
   const [weekVal, setWeekVal] = useState(currentAnchorWeek);
   const [importError, setImportError] = useState('');
+  const [copied, setCopied] = useState(false);
 
-  const numOverrides = Object.keys(overrides || {}).length;
+  const numPersonalOverrides = Object.keys(overrides || {}).length;
+  const numCommittedOverrides = Object.keys(committedOverrides || {}).length;
+
+  // Merge personal overrides ON TOP of committed for the admin database file
+  const mergedForExport = { ...(committedOverrides || {}), ...(overrides || {}) };
+  const numMergedOverrides = Object.keys(mergedForExport).length;
 
   const handleCalibrationSubmit = (e) => {
     e.preventDefault();
@@ -27,18 +34,32 @@ export default function SettingsModal({
     onClose();
   };
 
-  // Export Custom Database Overrides as a JSON file download
-  const handleExportDatabase = () => {
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(overrides, null, 2));
-    const downloadAnchor = document.createElement('a');
-    downloadAnchor.setAttribute("href", dataStr);
-    downloadAnchor.setAttribute("download", "vibemess_backup.json");
-    document.body.appendChild(downloadAnchor);
-    downloadAnchor.click();
-    downloadAnchor.remove();
+  // ── ADMIN: Export merged database as menuOverrides.json ──────────────────
+  // Merges committed + personal edits into one file ready to commit to GitHub.
+  const handleExportAdminDatabase = () => {
+    const json = JSON.stringify(mergedForExport, null, 2);
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(json);
+    const a = document.createElement('a');
+    a.setAttribute("href", dataStr);
+    a.setAttribute("download", "menuOverrides.json");
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
   };
 
-  // Import Custom Database Overrides from uploaded JSON file with format validation
+  // ── PERSONAL: Export only personal overrides as a backup ─────────────────
+  const handleExportPersonalBackup = () => {
+    const json = JSON.stringify(overrides, null, 2);
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(json);
+    const a = document.createElement('a');
+    a.setAttribute("href", dataStr);
+    a.setAttribute("download", "vibemess_personal_backup.json");
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+  };
+
+  // ── IMPORT: Restore personal overrides from a backup file ────────────────
   const handleImportDatabase = (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -49,26 +70,23 @@ export default function SettingsModal({
       try {
         const parsed = JSON.parse(event.target.result);
         
-        // Validate backup file format
         if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
           throw new Error("Backup file must be a JSON object.");
         }
 
-        // Schema pattern validation: "Week-Day-Cuisine-MessType-MealName"
+        // Schema key pattern: "Week-Day-Cuisine-MessType-MealName"
         const keyPattern = /^[A-D]-[A-Za-z]+-[A-Za-z ]+-[A-Za-z\-]+-[A-Za-z]+$/;
-        
         for (const [key, value] of Object.entries(parsed)) {
           if (!keyPattern.test(key)) {
-            throw new Error(`Invalid format key encountered: ${key}`);
+            throw new Error(`Invalid format key: ${key}`);
           }
           if (!Array.isArray(value) || !value.every(v => typeof v === 'string')) {
-            throw new Error(`Invalid value array for key ${key}. All items must be text strings.`);
+            throw new Error(`Invalid value for key ${key}. Expected array of strings.`);
           }
         }
 
-        // Save imported overrides
         onImportOverrides(parsed);
-        alert(`Successfully imported ${Object.keys(parsed).length} custom meal overrides!`);
+        alert(`✅ Imported ${Object.keys(parsed).length} meal overrides!`);
       } catch (err) {
         setImportError(err.message || "Failed to parse JSON file.");
       }
@@ -76,9 +94,17 @@ export default function SettingsModal({
     reader.readAsText(file);
   };
 
+  const copyGitCommands = () => {
+    const cmd = `cp ~/Downloads/menuOverrides.json ./public/menuOverrides.json\ngit add public/menuOverrides.json\ngit commit -m "update: mess menu database"\ngit push origin main\nnpm run deploy`;
+    navigator.clipboard.writeText(cmd).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-      <div className="modal-content glass-panel" style={{ maxInlineSize: '550px' }}>
+      <div className="modal-content glass-panel" style={{ maxInlineSize: '580px' }}>
         <div className="modal-header">
           <h2 id="settings-title" className="modal-title">⚙️ App Settings</h2>
           <button className="modal-close-btn" onClick={onClose} aria-label="Close dialog">×</button>
@@ -141,10 +167,7 @@ export default function SettingsModal({
               <button 
                 type="button" 
                 className="btn" 
-                onClick={() => {
-                  onRevertCalibration();
-                  onClose();
-                }}
+                onClick={() => { onRevertCalibration(); onClose(); }}
                 style={{ marginRight: 'auto', borderColor: '#ef4444', color: '#ef4444' }}
               >
                 Reset Calibration
@@ -158,32 +181,77 @@ export default function SettingsModal({
         {/* Tab 2: Database Management */}
         {activeTab === 'database' && (
           <div className="modal-body">
-            <p className="text-pretty" style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-              Manage customized mess menu databases. Any changes you make to meal cards are saved here locally. You can export them to backup or share, and upload a backup to restore it.
-            </p>
 
+            {/* Stats */}
             <div className="db-stats-box">
-              📊 <strong>Database Statistics</strong>
-              <div style={{ marginTop: '0.4rem' }}>
-                Total Custom Meals Modified: <strong>{numOverrides}</strong>
+              <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>📊 Database Status</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', fontSize: '0.85rem' }}>
+                <div>
+                  🌐 <strong>Committed (shared with everyone):</strong>{' '}
+                  <span style={{ color: numCommittedOverrides > 0 ? 'var(--accent)' : 'var(--text-tertiary)' }}>
+                    {numCommittedOverrides} meal{numCommittedOverrides !== 1 ? 's' : ''} edited
+                  </span>
+                </div>
+                <div>
+                  📱 <strong>Personal (this device only):</strong>{' '}
+                  <span style={{ color: numPersonalOverrides > 0 ? '#f59e0b' : 'var(--text-tertiary)' }}>
+                    {numPersonalOverrides} meal{numPersonalOverrides !== 1 ? 's' : ''} edited
+                  </span>
+                </div>
               </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-              {/* Backups Export/Import */}
+            {/* Admin Section */}
+            <div className="admin-section">
+              <div className="admin-section-title">🛡️ Admin — Publish to GitHub</div>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.5', margin: '0.4rem 0 0.75rem' }}>
+                This merges your personal edits with the existing committed database into one file.
+                Save it as <code style={{ background: 'rgba(99,102,241,0.1)', padding: '0 4px', borderRadius: '3px' }}>public/menuOverrides.json</code> in the project, then commit &amp; deploy.
+              </p>
+              <button 
+                type="button" 
+                className="btn btn-primary"
+                onClick={handleExportAdminDatabase}
+                disabled={numMergedOverrides === 0}
+                style={{ width: '100%' }}
+              >
+                📥 Download menuOverrides.json ({numMergedOverrides} edits)
+              </button>
+
+              {/* Git commands cheat sheet */}
+              <div className="git-cheatsheet">
+                <div className="git-cheatsheet-header">
+                  <span>📋 After downloading, run these commands:</span>
+                  <button className="git-copy-btn" onClick={copyGitCommands}>
+                    {copied ? '✅ Copied!' : 'Copy'}
+                  </button>
+                </div>
+                <pre className="git-commands">{`cp ~/Downloads/menuOverrides.json ./public/menuOverrides.json
+git add public/menuOverrides.json
+git commit -m "update: mess menu database"
+git push origin main
+npm run deploy`}</pre>
+              </div>
+            </div>
+
+            {/* Personal Backup Section */}
+            <div className="admin-section" style={{ borderColor: 'rgba(245,158,11,0.2)', background: 'rgba(245,158,11,0.03)' }}>
+              <div className="admin-section-title" style={{ color: '#f59e0b' }}>📱 Personal Backup</div>
+              <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', lineHeight: '1.5', margin: '0.4rem 0 0.75rem' }}>
+                Export just your personal local edits, or import a backup to restore them.
+              </p>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
                 <button 
                   type="button" 
-                  className="btn btn-primary"
-                  onClick={handleExportDatabase}
-                  disabled={numOverrides === 0}
-                  title="Download your custom database overrides as a JSON file"
+                  className="btn"
+                  onClick={handleExportPersonalBackup}
+                  disabled={numPersonalOverrides === 0}
                 >
-                  📥 Export Database
+                  💾 Backup Personal
                 </button>
                 
                 <label className="btn" style={{ cursor: 'pointer', textAlign: 'center' }}>
-                  📤 Import Database
+                  📤 Restore Backup
                   <input 
                     type="file" 
                     accept=".json" 
@@ -194,29 +262,29 @@ export default function SettingsModal({
               </div>
 
               {importError && (
-                <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.25rem' }}>
-                  ❌ Error: {importError}
+                <div style={{ color: '#ef4444', fontSize: '0.8rem', marginTop: '0.5rem' }}>
+                  ❌ {importError}
                 </div>
               )}
-
-              {/* Reset database overrides */}
-              <button 
-                type="button"
-                className="btn"
-                onClick={() => {
-                  if (confirm("Are you sure you want to clear all custom edits? This will restore the default menus parsed from PDFs.")) {
-                    onClearOverrides();
-                    alert("Cleared all database overrides successfully!");
-                  }
-                }}
-                disabled={numOverrides === 0}
-                style={{ borderColor: '#ef4444', color: '#ef4444', width: '100%', marginTop: '0.5rem' }}
-              >
-                🗑️ Clear All Database Overrides
-              </button>
             </div>
 
-            <div className="modal-footer" style={{ borderTop: 'none', paddingTop: '0', marginTop: '0.5rem' }}>
+            {/* Clear personal overrides */}
+            <button 
+              type="button"
+              className="btn"
+              onClick={() => {
+                if (confirm("Clear all your personal edits? The committed (shared) database is not affected.")) {
+                  onClearOverrides();
+                  alert("Personal edits cleared. You now see the committed shared menu.");
+                }
+              }}
+              disabled={numPersonalOverrides === 0}
+              style={{ borderColor: '#ef4444', color: '#ef4444', width: '100%' }}
+            >
+              🗑️ Clear Personal Edits ({numPersonalOverrides})
+            </button>
+
+            <div className="modal-footer" style={{ borderTop: 'none', paddingTop: '0' }}>
               <button type="button" className="btn" onClick={onClose} style={{ width: '100%' }}>Close Settings</button>
             </div>
           </div>

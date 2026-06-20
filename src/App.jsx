@@ -46,6 +46,10 @@ export default function App() {
     return saved ? JSON.parse(saved) : {};
   });
 
+  // --- Committed (Admin) Database: fetched from /menuOverrides.json in the repo ---
+  // This is the source-of-truth for all users. Admin edits this file and pushes to GitHub.
+  const [committedOverrides, setCommittedOverrides] = useState({});
+
   // --- UI State ---
   const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [activeCuisine, setActiveCuisine] = useState('North Indian');
@@ -63,6 +67,23 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('messMenuOverrides', JSON.stringify(menuOverrides));
   }, [menuOverrides]);
+
+  // --- Fetch Committed (Admin) Database from /menuOverrides.json ---
+  useEffect(() => {
+    fetch('./menuOverrides.json')
+      .then(res => {
+        if (!res.ok) return {};
+        return res.json();
+      })
+      .then(data => {
+        if (data && typeof data === 'object' && !Array.isArray(data)) {
+          setCommittedOverrides(data);
+        }
+      })
+      .catch(() => {
+        // If fetch fails (e.g., dev without the file), silently ignore.
+      });
+  }, []);
 
   // --- Apply Theme Class ---
   useEffect(() => {
@@ -143,16 +164,23 @@ export default function App() {
     setManualDay(null);
   };
 
+  // 3-layer merge: base menu → committed admin overrides → personal localStorage overrides
+  // Personal (localStorage) always wins so the admin can still test locally.
   const getMenuWithOverrides = (week, day, cuisine, messType) => {
     const baseMenu = getMenu(week, day, cuisine, messType);
     if (!baseMenu) return null;
-    
+
     const finalMenu = {};
     for (const [mealName, items] of Object.entries(baseMenu)) {
       const key = `${week}-${day}-${cuisine}-${messType}-${mealName}`;
       if (menuOverrides[key]) {
+        // Personal local edit wins
         finalMenu[mealName] = menuOverrides[key];
+      } else if (committedOverrides[key]) {
+        // Admin-committed database
+        finalMenu[mealName] = committedOverrides[key];
       } else {
+        // Raw PDF-parsed base
         finalMenu[mealName] = items;
       }
     }
@@ -422,6 +450,7 @@ export default function App() {
         onSaveCalibration={handleSaveCalibration}
         onRevertCalibration={handleRevertCalibration}
         overrides={menuOverrides}
+        committedOverrides={committedOverrides}
         onClearOverrides={() => setMenuOverrides({})}
         onImportOverrides={(imported) => setMenuOverrides(imported)}
       />
