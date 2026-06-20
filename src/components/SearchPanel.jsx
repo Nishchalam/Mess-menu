@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 
-export default function SearchPanel({ onSelectResult, favorites, onRemoveFavorite, searchMeals }) {
+export default function SearchPanel({ onSelectResult, favorites, onRemoveFavorite, searchMeals, onCloseDrawer }) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState([]);
 
@@ -23,7 +23,19 @@ export default function SearchPanel({ onSelectResult, favorites, onRemoveFavorit
     <div className="search-drawer glass-panel">
       <div className="search-header">
         <h3 className="search-title">Explore & Search</h3>
-        {query && <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{results.length} found</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {query && <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{results.length} found</span>}
+          {onCloseDrawer && (
+            <button 
+              className="search-close-btn" 
+              onClick={onCloseDrawer}
+              title="Close panel"
+              aria-label="Close search panel"
+            >
+              &times;
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="search-input-wrapper">

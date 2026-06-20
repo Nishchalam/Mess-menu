@@ -1124,6 +1124,51 @@
   .light .db-stats-box {
     background: rgba(0, 0, 0, 0.01);
   }
+
+  /* Responsive Layout Base Styles */
+  .main-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+    gap: 1.5rem;
+    align-items: start;
+  }
+
+  .search-aside {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  /* Drawer Backdrop Overlay */
+  .drawer-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 80;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+
+  .drawer-backdrop.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Floating Action Button for search on mobile */
+  .fab-search {
+    display: none; /* Hidden by default on desktop */
+  }
+
+  /* Search Drawer Close Button (desktop default hidden) */
+  .search-close-btn {
+    display: none;
+  }
 }
 
 @layer utilities {
@@ -1142,6 +1187,91 @@
 
 /* Media Queries for Responsive Design */
 @media (max-width: 768px) {
+  .main-layout {
+    grid-template-columns: 1fr;
+    gap: 1.25rem;
+  }
+
+  /* Convert sidebar into a fixed mobile sliding drawer */
+  .search-aside {
+    position: fixed;
+    top: 0;
+    right: 0;
+    width: 90vw;
+    max-width: 400px;
+    height: 100vh;
+    z-index: 90;
+    background: var(--bg-glass);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.35);
+    border: none;
+    border-left: 1px solid var(--border-glass);
+    border-radius: 0;
+    transform: translateX(100%);
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    padding: 1.5rem;
+    margin-top: 0;
+    overflow-y: auto;
+  }
+
+  .search-aside.open {
+    transform: translateX(0);
+  }
+
+  /* Show floating search button on mobile */
+  .fab-search {
+    display: flex;
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 70;
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #ffffff;
+    border: none;
+    box-shadow: 0 4px 14px var(--accent-glow);
+    cursor: pointer;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    transition: var(--transition-smooth);
+  }
+
+  .fab-search:hover {
+    transform: translateY(-2px) scale(1.05);
+    background: var(--accent-hover);
+    box-shadow: 0 6px 20px var(--accent-glow);
+  }
+
+  .fab-search:active {
+    transform: translateY(1px);
+  }
+
+  /* Show close button in mobile drawer */
+  .search-close-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    font-size: 1.75rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: var(--transition-smooth);
+    padding: 0.25rem;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+  }
+
+  .search-close-btn:hover {
+    background: var(--border-glass);
+    color: var(--text-primary);
+  }
+
   .app-header {
     padding: 1rem;
     flex-direction: column;
@@ -1152,14 +1282,20 @@
     justify-content: space-between;
   }
 
+  /* Horizontally scrollable calendar days bar */
   .week-days-bar {
-    grid-template-columns: repeat(7, 1fr);
+    display: flex;
     overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    gap: 0.5rem;
     padding-bottom: 0.5rem;
+    -webkit-overflow-scrolling: touch;
   }
 
   .day-tab-btn {
-    min-width: 55px;
+    flex: 0 0 calc(14.28% - 0.43rem);
+    min-width: 48px;
+    scroll-snap-align: start;
   }
 
   .filters-row {

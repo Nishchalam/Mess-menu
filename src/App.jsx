@@ -52,6 +52,7 @@ export default function App() {
   const [activeMessType, setActiveMessType] = useState('Veg');
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [activeEditMeal, setActiveEditMeal] = useState(null); // { mealName, week, day, cuisine, messType, currentItems }
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
 
   // --- Manual Override State ---
   // If the user manually changes the day or week, we track the override.
@@ -115,6 +116,7 @@ export default function App() {
     setManualDay(day);
     setActiveCuisine(cuisine);
     setActiveMessType(messType);
+    setIsSearchOpen(false); // Close mobile drawer overlay
   };
 
   const handleSaveCalibration = (newDate, newWeek) => {
@@ -258,7 +260,10 @@ export default function App() {
       </header>
 
       {/* Main Display Grid */}
-      <main style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 2fr) minmax(0, 1fr)', gap: '1.5rem', alignItems: 'start' }}>
+      <main className="main-layout">
+        {/* Mobile Search Overlay Backdrop */}
+        <div className={`drawer-backdrop ${isSearchOpen ? 'open' : ''}`} onClick={() => setIsSearchOpen(false)} />
+
         {/* Left Side: Filter and Menu Display */}
         <section style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <div className="filters-panel glass-panel">
@@ -387,14 +392,25 @@ export default function App() {
         </section>
 
         {/* Right Side: Search and Favorites Panel */}
-        <aside style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+        <aside className={`search-aside ${isSearchOpen ? 'open' : ''}`}>
           <SearchPanel 
             onSelectResult={handleSelectSearchResult}
             favorites={favorites}
             onRemoveFavorite={(name) => setFavorites(prev => prev.filter(f => f !== name))}
             searchMeals={searchMealsWithOverrides}
+            onCloseDrawer={() => setIsSearchOpen(false)}
           />
         </aside>
+
+        {/* Floating Action Button for mobile search */}
+        <button 
+          className="fab-search"
+          onClick={() => setIsSearchOpen(true)}
+          title="Search & Starred Dishes"
+          aria-label="Open search and favorites"
+        >
+          🔍
+        </button>
       </main>
 
       {/* Settings Modal */}
