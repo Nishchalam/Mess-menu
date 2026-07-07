@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from 'react';
 
-export default function MealEditModal({ isOpen, onClose, week, day, cuisine, messType, mealName, currentItems, onSave, onReset }) {
+export default function MealEditModal({ isOpen, onClose, week, day, cuisine, messType, mealName, currentItems, onSave }) {
   if (!isOpen) return null;
 
-  // Join items with a newline so each item is on a new line
   const [textVal, setTextVal] = useState('');
 
   useEffect(() => {
@@ -16,13 +15,11 @@ export default function MealEditModal({ isOpen, onClose, week, day, cuisine, mes
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    // Split by newline and filter out empty entries
     const items = textVal
       .split('\n')
       .map(item => item.trim())
       .filter(item => item !== '');
     onSave(items);
-    onClose();
   };
 
   return (
@@ -39,7 +36,7 @@ export default function MealEditModal({ isOpen, onClose, week, day, cuisine, mes
             <span><strong>Cycle:</strong> Week {week}, {day}</span>
           </div>
 
-          <div className="form-group">
+          <div className="form-group" style={{ marginTop: '1rem' }}>
             <label htmlFor="meal-items-input" className="form-label">Menu Items (One per line)</label>
             <textarea 
               id="meal-items-input"
@@ -54,19 +51,7 @@ export default function MealEditModal({ isOpen, onClose, week, day, cuisine, mes
             </span>
           </div>
 
-          <div className="modal-footer">
-            <button 
-              type="button" 
-              className="btn" 
-              onClick={() => {
-                onReset();
-                onClose();
-              }}
-              style={{ marginRight: 'auto', borderColor: '#ef4444', color: '#ef4444' }}
-              title="Revert this specific meal card back to default parsed PDF menu"
-            >
-              Reset to Default
-            </button>
+          <div className="modal-footer" style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
             <button type="button" className="btn" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary">Save Changes</button>
           </div>
