@@ -13,8 +13,8 @@ import SettingsModal from './components/SettingsModal';
 import MealEditModal from './components/MealEditModal';
 import SearchPanel from './components/SearchPanel';
 
-const DEFAULT_ANCHOR_DATE = '2026-06-01'; // A Monday
-const DEFAULT_ANCHOR_WEEK = 'A';
+const DEFAULT_ANCHOR_DATE = '2026-07-06'; // A Monday
+const DEFAULT_ANCHOR_WEEK = 'C';
 
 export default function App() {
   // --- Persistent State from localStorage ---
@@ -27,12 +27,22 @@ export default function App() {
   const [anchorDate, setAnchorDate] = useState(() => {
     const saved = localStorage.getItem('messMenuAnchorDate');
     if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) {
+      // Migrate from old default calibration
+      if (saved === '2026-06-01') {
+        localStorage.setItem('messMenuAnchorDate', '2026-07-06');
+        localStorage.setItem('messMenuAnchorWeek', 'C');
+        return '2026-07-06';
+      }
       return saved;
     }
     return DEFAULT_ANCHOR_DATE;
   });
 
   const [anchorWeek, setAnchorWeek] = useState(() => {
+    const savedDate = localStorage.getItem('messMenuAnchorDate');
+    if (savedDate === '2026-06-01') {
+      return 'C';
+    }
     return localStorage.getItem('messMenuAnchorWeek') || DEFAULT_ANCHOR_WEEK;
   });
 
