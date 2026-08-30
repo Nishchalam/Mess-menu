@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getMenu, searchMeals } from './menuData';
+import { getMenu, searchMeals, DATA_VERSION } from './menuData';
 import { 
   calculateWeekCycle, 
   formatDateInput, 
@@ -50,6 +50,47 @@ export default function App() {
     const saved = localStorage.getItem('messMenuFavorites');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // --- Menu Database Update Notice ---
+  // Fires whenever DATA_VERSION (in menu-data.js) changes from the value this
+  // browser last saw: shows an in-app banner always, plus a native browser
+  // notification if the user has granted permission.
+  const [showUpdateBanner, setShowUpdateBanner] = useState(() => {
+    const seenVersion = localStorage.getItem('messMenuDataVersion');
+    return seenVersion !== DATA_VERSION;
+  });
+  const [notifyPermission, setNotifyPermission] = useState(
+    typeof Notification !== 'undefined' ? Notification.permission : 'unsupported'
+  );
+
+  useEffect(() => {
+    if (!showUpdateBanner) return;
+    localStorage.setItem('messMenuDataVersion', DATA_VERSION);
+
+    if (typeof Notification === 'undefined') return;
+    if (Notification.permission === 'granted') {
+      new Notification('IITM Mess Menu updated', {
+        body: DATA_VERSION,
+        icon: '/favicon.svg'
+      });
+    }
+    // If permission hasn't been decided yet, we don't prompt automatically here —
+    // browsers require that request to come from a user gesture. The banner's
+    // "Enable alerts" button below does that instead.
+  }, [showUpdateBanner]);
+
+  const handleEnableNotifications = () => {
+    if (typeof Notification === 'undefined') return;
+    Notification.requestPermission().then((perm) => {
+      setNotifyPermission(perm);
+      if (perm === 'granted') {
+        new Notification('Menu update alerts enabled', {
+          body: "You'll be notified here whenever the menu database changes.",
+          icon: '/favicon.svg'
+        });
+      }
+    });
+  };
 
   // --- UI State ---
   const [selectedDate, setSelectedDate] = useState(() => new Date());
@@ -320,6 +361,25 @@ export default function App() {
               })}
             </div>
           </div>
+
+          {/* Menu Database Updated Notice */}
+          {showUpdateBanner && (
+            <div className="info-bar glass-panel" style={{ borderLeft: '3px solid #22c55e' }}>
+              <span>
+                🔔 <strong>Menu database updated</strong> — {DATA_VERSION.replace(/^\d{4}-\d{2}-\d{2}:\s*/, '')}.
+              </span>
+              <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+                {notifyPermission === 'default' && (
+                  <button className="revert-badge" onClick={handleEnableNotifications}>
+                    Enable alerts
+                  </button>
+                )}
+                <button className="revert-badge" onClick={() => setShowUpdateBanner(false)}>
+                  Dismiss
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Override Indicator Notice */}
           {isOverridden && (

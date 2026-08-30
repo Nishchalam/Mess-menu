@@ -1,4 +1,6 @@
-import { menuData } from '../menu-data';
+import { menuData, DATA_VERSION } from '../menu-data';
+
+export { DATA_VERSION };
 
 export const CUISINES = ['North Indian', 'South Indian', 'Unified'];
 export const MESS_TYPES = ['Veg', 'Non-Veg'];
