@@ -1,20 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { getMenu, searchMeals, DATA_VERSION } from './menuData';
-import { 
-  calculateWeekCycle, 
-  formatDateInput, 
-  formatDateDisplay, 
-  getDaysOfWeekDates, 
-  DAYS_OF_WEEK, 
-  WEEKS 
+import {
+  calculateWeekCycle,
+  formatDateInput,
+  formatDateDisplay,
+  getDaysOfWeekDates,
+  DAYS_OF_WEEK,
+  WEEKS
 } from './utils';
 import MealCard from './components/MealCard';
 import SettingsModal from './components/SettingsModal';
 import MealEditModal from './components/MealEditModal';
 import SearchPanel from './components/SearchPanel';
 
-const DEFAULT_ANCHOR_DATE = '2026-07-06'; // A Monday
-const DEFAULT_ANCHOR_WEEK = 'C';
+const DEFAULT_ANCHOR_DATE = '2026-08-24'; // A Monday
+const DEFAULT_ANCHOR_WEEK = 'A';
+
+// Default cuisine tab is South Indian before this date, Unified from it on.
+const CUISINE_CUTOVER_DATE = '2026-08-31';
 
 export default function App() {
   // --- Persistent State from localStorage ---
@@ -27,11 +30,11 @@ export default function App() {
   const [anchorDate, setAnchorDate] = useState(() => {
     const saved = localStorage.getItem('messMenuAnchorDate');
     if (saved && /^\d{4}-\d{2}-\d{2}$/.test(saved)) {
-      // Migrate from old default calibration
-      if (saved === '2026-06-01') {
-        localStorage.setItem('messMenuAnchorDate', '2026-07-06');
-        localStorage.setItem('messMenuAnchorWeek', 'C');
-        return '2026-07-06';
+      // Migrate from old default calibrations
+      if (saved === '2026-06-01' || saved === '2026-07-06') {
+        localStorage.setItem('messMenuAnchorDate', DEFAULT_ANCHOR_DATE);
+        localStorage.setItem('messMenuAnchorWeek', DEFAULT_ANCHOR_WEEK);
+        return DEFAULT_ANCHOR_DATE;
       }
       return saved;
     }
@@ -40,8 +43,8 @@ export default function App() {
 
   const [anchorWeek, setAnchorWeek] = useState(() => {
     const savedDate = localStorage.getItem('messMenuAnchorDate');
-    if (savedDate === '2026-06-01') {
-      return 'C';
+    if (savedDate === '2026-06-01' || savedDate === '2026-07-06') {
+      return DEFAULT_ANCHOR_WEEK;
     }
     return localStorage.getItem('messMenuAnchorWeek') || DEFAULT_ANCHOR_WEEK;
   });
@@ -94,7 +97,9 @@ export default function App() {
 
   // --- UI State ---
   const [selectedDate, setSelectedDate] = useState(() => new Date());
-  const [activeCuisine, setActiveCuisine] = useState('North Indian');
+  const [activeCuisine, setActiveCuisine] = useState(() =>
+    formatDateInput(new Date()) < CUISINE_CUTOVER_DATE ? 'South Indian' : 'Unified'
+  );
   const [activeMessType, setActiveMessType] = useState('Veg');
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [activeEditMeal, setActiveEditMeal] = useState(null);
