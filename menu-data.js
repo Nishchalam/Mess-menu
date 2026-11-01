@@ -1,7 +1,7 @@
 // Bump this string whenever menuData below is revised. The app compares it
 // against the last value it saw (stored in localStorage) to notify users
 // that the menu database was updated.
-export const DATA_VERSION = "2026-08-30: North, South & Unified menus revised";
+export const DATA_VERSION = "2026-11-01: New 'Send Request to Creator' button in the meal edit dialog to suggest menu changes; South Indian is now the default cuisine";
 
 export const commonItems = {
   Breakfast: [
