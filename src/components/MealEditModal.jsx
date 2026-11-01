@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { EDIT_REQUEST_ENDPOINT } from '../utils';
 
-export default function MealEditModal({ isOpen, onClose, week, day, cuisine, messType, mealName, currentItems, onSave, onSubmitRequest }) {
+export default function MealEditModal({ isOpen, onClose, week, day, cuisine, messType, mealName, currentItems, onSubmitRequest }) {
   const [textVal, setTextVal] = useState('');
   const [requestState, setRequestState] = useState('idle'); // 'idle' | 'sending' | 'sent' | 'error'
 
@@ -19,11 +19,6 @@ export default function MealEditModal({ isOpen, onClose, week, day, cuisine, mes
     .split('\n')
     .map(item => item.trim())
     .filter(item => item !== '');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave(parseItems());
-  };
 
   const handleSendRequest = async () => {
     setRequestState('sending');
@@ -50,7 +45,7 @@ export default function MealEditModal({ isOpen, onClose, week, day, cuisine, mes
           <button className="modal-close-btn" onClick={onClose} aria-label="Close dialog">×</button>
         </div>
         
-        <form onSubmit={handleSubmit} className="modal-body">
+        <div className="modal-body">
           <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
             <span><strong>Cuisine:</strong> {cuisine} ({messType})</span>
             <span><strong>Cycle:</strong> Week {week}, {day}</span>
@@ -82,9 +77,8 @@ export default function MealEditModal({ isOpen, onClose, week, day, cuisine, mes
             >
               {requestLabel}
             </button>
-            <button type="submit" className="btn btn-primary">Save Changes</button>
           </div>
-        </form>
+        </div>
       </div>
     </div>
   );

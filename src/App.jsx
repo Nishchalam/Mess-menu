@@ -215,39 +215,6 @@ export default function App() {
     }
   };
 
-  const handleSaveMenuEdit = async (updatedItems) => {
-    if (!activeEditMeal) return;
-    try {
-      const response = await fetch('/api/save-menu', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          week: activeEditMeal.week,
-          day: activeEditMeal.day,
-          cuisine: activeEditMeal.cuisine,
-          messType: activeEditMeal.messType,
-          mealName: activeEditMeal.mealName,
-          updatedItems
-        })
-      });
-
-      if (!response.ok) {
-        throw new Error('Server responded with ' + response.status);
-      }
-
-      const result = await response.json();
-      if (!result.success) {
-        throw new Error(result.error || 'Unknown error');
-      }
-
-      setActiveEditMeal(null);
-    } catch (err) {
-      alert('Failed to save menu changes. Note that editing menu-data.js is only supported when running the app locally in development mode (npm run dev).\n\nError: ' + err.message);
-    }
-  };
-
   return (
     <div className="app-container">
       {/* Background ambient blobs */}
@@ -492,7 +459,6 @@ export default function App() {
           messType={activeEditMeal.messType}
           mealName={activeEditMeal.mealName}
           currentItems={activeEditMeal.currentItems}
-          onSave={handleSaveMenuEdit}
           onSubmitRequest={handleSubmitEditRequest}
         />
       )}
