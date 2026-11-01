@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { EDIT_REQUEST_ENDPOINT } from '../utils';
 
-export default function MealEditModal({ isOpen, onClose, week, day, cuisine, messType, mealName, currentItems, onSave }) {
-  if (!isOpen) return null;
-
+export default function MealEditModal({ isOpen, onClose, week, day, cuisine, messType, mealName, currentItems, onSave, onSubmitRequest }) {
   const [textVal, setTextVal] = useState('');
+  const [requestState, setRequestState] = useState('idle'); // 'idle' | 'sending' | 'sent' | 'error'
 
   useEffect(() => {
     if (currentItems) {
@@ -13,14 +13,34 @@ export default function MealEditModal({ isOpen, onClose, week, day, cuisine, mes
     }
   }, [currentItems, isOpen]);
 
+  if (!isOpen) return null;
+
+  const parseItems = () => textVal
+    .split('\n')
+    .map(item => item.trim())
+    .filter(item => item !== '');
+
   const handleSubmit = (e) => {
     e.preventDefault();
-    const items = textVal
-      .split('\n')
-      .map(item => item.trim())
-      .filter(item => item !== '');
-    onSave(items);
+    onSave(parseItems());
   };
+
+  const handleSendRequest = async () => {
+    setRequestState('sending');
+    try {
+      await onSubmitRequest(parseItems());
+      setRequestState('sent');
+    } catch {
+      setRequestState('error');
+    }
+  };
+
+  const requestLabel = {
+    idle: 'Send Request to Creator',
+    sending: 'Sending…',
+    sent: 'Request sent ✓',
+    error: 'Failed, try again'
+  }[requestState];
 
   return (
     <div className="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
@@ -53,6 +73,15 @@ export default function MealEditModal({ isOpen, onClose, week, day, cuisine, mes
 
           <div className="modal-footer" style={{ marginTop: '1.5rem', display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
             <button type="button" className="btn" onClick={onClose}>Cancel</button>
+            <button
+              type="button"
+              className="btn"
+              onClick={handleSendRequest}
+              disabled={!EDIT_REQUEST_ENDPOINT || requestState === 'sending' || requestState === 'sent'}
+              title={EDIT_REQUEST_ENDPOINT ? 'Send this change to the creator' : 'Request form is not configured'}
+            >
+              {requestLabel}
+            </button>
             <button type="submit" className="btn btn-primary">Save Changes</button>
           </div>
         </form>

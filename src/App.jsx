@@ -6,7 +6,8 @@ import {
   formatDateDisplay,
   getDaysOfWeekDates,
   DAYS_OF_WEEK,
-  WEEKS
+  WEEKS,
+  EDIT_REQUEST_ENDPOINT
 } from './utils';
 import MealCard from './components/MealCard';
 import SettingsModal from './components/SettingsModal';
@@ -187,6 +188,32 @@ export default function App() {
 
   // Get dates of the currently selected week (to display days tab)
   const weekDates = getDaysOfWeekDates(selectedDate);
+
+  // Sends the requested change to the creator's form. No personal details are included.
+  const handleSubmitEditRequest = async (requestedItems) => {
+    if (!activeEditMeal) return;
+    const { week, day, cuisine, messType, mealName, currentItems } = activeEditMeal;
+    const response = await fetch(EDIT_REQUEST_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        _subject: `Menu edit request: ${cuisine} ${messType} - ${day} (Week ${week}) - ${mealName}`,
+        cuisine,
+        messType,
+        week,
+        day,
+        meal: mealName,
+        currentItems: (currentItems || []).join(', '),
+        requestedItems: requestedItems.join(', ')
+      })
+    });
+    if (!response.ok) {
+      throw new Error('Server responded with ' + response.status);
+    }
+  };
 
   const handleSaveMenuEdit = async (updatedItems) => {
     if (!activeEditMeal) return;
@@ -466,6 +493,7 @@ export default function App() {
           mealName={activeEditMeal.mealName}
           currentItems={activeEditMeal.currentItems}
           onSave={handleSaveMenuEdit}
+          onSubmitRequest={handleSubmitEditRequest}
         />
       )}
     </div>

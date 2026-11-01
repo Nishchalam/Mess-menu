@@ -4,6 +4,10 @@
 export const DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 export const WEEKS = ['A', 'B', 'C', 'D'];
 
+// Form endpoint (e.g. Formspree) that emails the creator about menu edit requests.
+// Leave empty to disable the "Send Request" button.
+export const EDIT_REQUEST_ENDPOINT = 'https://formspree.io/f/xzeejoko';
+
 // Align any date to the start of its week (Monday)
 export const getStartOfWeek = (date) => {
   const d = new Date(date);
