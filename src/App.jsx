@@ -16,9 +16,6 @@ import SearchPanel from './components/SearchPanel';
 const DEFAULT_ANCHOR_DATE = '2026-08-24'; // A Monday
 const DEFAULT_ANCHOR_WEEK = 'A';
 
-// Default cuisine tab is South Indian before this date, Unified from it on.
-const CUISINE_CUTOVER_DATE = '2026-08-31';
-
 export default function App() {
   // --- Persistent State from localStorage ---
   const [theme, setTheme] = useState(() => {
@@ -97,9 +94,7 @@ export default function App() {
 
   // --- UI State ---
   const [selectedDate, setSelectedDate] = useState(() => new Date());
-  const [activeCuisine, setActiveCuisine] = useState(() =>
-    formatDateInput(new Date()) < CUISINE_CUTOVER_DATE ? 'South Indian' : 'Unified'
-  );
+  const [activeCuisine, setActiveCuisine] = useState('South Indian');
   const [activeMessType, setActiveMessType] = useState('Veg');
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [activeEditMeal, setActiveEditMeal] = useState(null);
